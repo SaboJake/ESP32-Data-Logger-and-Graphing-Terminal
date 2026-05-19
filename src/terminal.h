@@ -12,4 +12,4 @@ void toggle_terminal();
 // Check if terminal is open
 bool is_terminal_active();
 
-#endif
+#endif // TERMINAL_H

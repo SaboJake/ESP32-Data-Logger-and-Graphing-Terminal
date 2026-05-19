@@ -76,14 +76,6 @@ The system is split into hardware and software modules. The system is partially 
   * **''ps2_keyboard.cpp'' / ''ps2_keyboard.h'':** A bare-metal PS/2 keyboard driver utilizing hardware interrupts to capture user inputs. 
     * //Key functions:// ''begin()'', ''read()'', ''handleInterrupt()''.
 
-<note tip>
-Descrierea codului aplicaţiei (firmware):
-  * mediu de dezvoltare (if any) (e.g. AVR Studio, CodeVisionAVR)
-  * librării şi surse 3rd-party (e.g. Procyon AVRlib)
-  * algoritmi şi structuri pe care plănuiţi să le implementaţi
-  * (etapa 3) surse şi funcţii implementate
-</note>
-
 ===== Rezultate Obţinute =====
 
 <note tip>
@@ -93,26 +85,17 @@ Care au fost rezultatele obţinute în urma realizării proiectului vostru.
 ===== Concluzii =====
 
 ===== Download =====
-
-<note warning>
-O arhivă (sau mai multe dacă este cazul) cu fişierele obţinute în urma realizării proiectului: surse, scheme, etc. Un fişier README, un ChangeLog, un script de compilare şi copiere automată pe uC crează întotdeauna o impresie bună ;-).
-
-Fişierele se încarcă pe wiki folosind facilitatea **Add Images or other files**. Namespace-ul în care se încarcă fişierele este de tipul **:pm:prj20??:c?** sau **:pm:prj20??:c?:nume_student** (dacă este cazul). **Exemplu:** Dumitru Alin, 331CC -> **:pm:prj2009:cc:dumitru_alin**.
-</note>
+  * [[https://github.com/SaboJake/ESP32-Data-Logger-and-Graphing-Terminal|github]]
 
 ===== Jurnal =====
-
-* **06.05.2026:** Added introduction, general description and block and electrical diagrams.
-
-<note tip>
-Puteți avea și o secțiune de jurnal în care să poată urmări asistentul de proiect progresul proiectului.
-</note>
+  * **06.05.2026:** Added introduction, general description and block and electrical diagrams.
+  * **19.05.2026:** Added firmware, bibliography and resources. Updated electrical diagram and block diagram.
 
 ===== Bibliografie/Resurse =====
-
-<note>
-Listă cu documente, datasheet-uri, resurse Internet folosite, eventual grupate pe **Resurse Software** şi **Resurse Hardware**.
-</note>
+  * [[https://documentation.espressif.com/esp32-wroom-32d_esp32-wroom-32u_datasheet_en.pdf|Data sheet ESP32-WROOM-32D]]
+  * [[https://ww1.microchip.com/downloads/en/DeviceDoc/doc0006.pdf|Data sheet AT24C256]]
+  * [[https://cdn-shop.adafruit.com/datasheets/BST-BMP180-DS000-09.pdf|Data sheet BMP180]]
+  * [[https://wiki.osdev.org/PS/2_Keyboard|Data sheet PS/2 keyboard]]
 
 <html><a class="media mediafile mf_pdf" href="?do=export_pdf">Export to PDF</a></html>
 

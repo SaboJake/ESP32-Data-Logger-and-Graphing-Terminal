@@ -12,7 +12,8 @@ public:
     char read();
     void IRAM_ATTR handleInterrupt();
     bool isCtrl() const { return _isCtrl; }
-    uint8_t getLastScancode(); // DEBUG
+    
+    uint8_t getLastScancode();
 
 private:
     uint8_t _clockPin;
@@ -27,18 +28,15 @@ private:
     volatile uint8_t _tail;
     volatile uint32_t _lastInterruptTime;
 
-    // State machine variables
     bool _isUp;
     bool _isShifted;
     bool _isExtended;
     bool _isCtrl;
-    bool _capsLock; // Track Caps Lock state
+    bool _capsLock;
     char _nextChar;
 
-    // Internal methods
     void processRawBytes();
     
-    // Bi-directional PS/2 methods
     bool write(uint8_t data);
     void updateLEDs();
 };

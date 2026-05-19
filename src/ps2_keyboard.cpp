@@ -1,14 +1,11 @@
 #include "ps2_keyboard.h"
 
-// --- Global ISR Wrapper ---
 static void IRAM_ATTR ps2_isr_wrapper(void* arg) {
     static_cast<PS2Keyboard*>(arg)->handleInterrupt();
 }
 
 static volatile uint8_t _lastScancode = 0;
 
-// --- PS/2 Scancode to ASCII Maps (Standard Set 2) ---
-// (Keep your exact same unshiftedMap and shiftedMap arrays here)
 static const char unshiftedMap[128] = {
   0,0,0,0,0,0,0,0,0,'\t',0,0,0,'\t','`',0,
   0,0,0,0,0,'q','1',0,0,0,'z','s','a','w','2',0,
@@ -63,9 +60,6 @@ uint8_t PS2Keyboard::getLastScancode() {
 void IRAM_ATTR PS2Keyboard::handleInterrupt() {
     uint32_t now = micros();
     
-    // TIMEOUT FIX: PS/2 clock runs at 10-16kHz (~60-100us per pulse).
-    // If more than 2.5ms (2500us) have passed, reset the sequence.
-    // This instantly recovers from missed bits caused by fast typing or screen updates.
     if (now - _lastInterruptTime > 2500) {
         _bitCount = 0;
         _dataByte = 0;
@@ -101,19 +95,18 @@ void IRAM_ATTR PS2Keyboard::handleInterrupt() {
     }
 }
 
-// --- HOST TO KEYBOARD TRANSMISSION ---
 bool PS2Keyboard::write(uint8_t data) {
     uint8_t parity = 1;
 
-    // 1. Disable interrupts while we take over the lines
+    // Disable interrupts while we take over the lines
     detachInterrupt(digitalPinToInterrupt(_clockPin));
 
-    // 2. Inhibit communication (Pull clock low for >100us)
+    // Inhibit communication (Pull clock low for >100us)
     pinMode(_clockPin, OUTPUT);
     digitalWrite(_clockPin, LOW);
     delayMicroseconds(120);
 
-    // 3. Request to Send (Pull data low, release clock)
+    // Request to Send (Pull data low, release clock)
     pinMode(_dataPin, OUTPUT);
     digitalWrite(_dataPin, LOW);
     pinMode(_clockPin, INPUT_PULLUP);
@@ -123,7 +116,7 @@ bool PS2Keyboard::write(uint8_t data) {
     while (digitalRead(_clockPin) == HIGH && timeout--) { delayMicroseconds(1); }
     if (timeout <= 0) goto reset_bus;
 
-    // 4. Send 8 Data Bits
+    // Send 8 Data Bits
     for (int i = 0; i < 8; i++) {
         if (data & 1) digitalWrite(_dataPin, HIGH);
         else { digitalWrite(_dataPin, LOW); parity++; } // Calculate Odd Parity
@@ -134,18 +127,18 @@ bool PS2Keyboard::write(uint8_t data) {
         data >>= 1;
     }
 
-    // 5. Send Parity Bit
+    // Send Parity Bit
     if (parity & 1) digitalWrite(_dataPin, HIGH);
     else digitalWrite(_dataPin, LOW);
     while (digitalRead(_clockPin) == LOW);
     while (digitalRead(_clockPin) == HIGH);
 
-    // 6. Send Stop Bit (High) and Release Data line
+    // Send Stop Bit (High) and Release Data line
     pinMode(_dataPin, INPUT_PULLUP);
     while (digitalRead(_clockPin) == LOW);
     while (digitalRead(_clockPin) == HIGH);
 
-    // 7. Wait for ACK from keyboard (Keyboard pulls Data low)
+    // Wait for ACK from keyboard (Keyboard pulls Data low)
     while (digitalRead(_dataPin) == HIGH);
     while (digitalRead(_clockPin) == LOW);
 
@@ -164,7 +157,6 @@ void PS2Keyboard::updateLEDs() {
     uint8_t ledState = 0;
     if (_capsLock) ledState |= (1 << 2); 
 
-    // Command 0xED tells the keyboard to update LEDs
     if (write(0xED)) {
         delay(10); // Give keyboard a tiny moment to process
         write(ledState); // Send the actual LED states
@@ -204,7 +196,6 @@ void PS2Keyboard::processRawBytes() {
                 } else if (code < 128) {
                     char c = 0;
                     
-                    // --- THE FIX IS HERE ---
                     if (code == 0x76) {
                         c = 27; // ESC key forced
                     } else if (code == 0x75) {

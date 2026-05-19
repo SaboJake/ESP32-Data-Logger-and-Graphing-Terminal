@@ -7,4 +7,4 @@ void init_menu(lv_indev_t * indev);
 void toggle_menu();
 bool is_menu_active();
 
-#endif
+#endif // MENU_H

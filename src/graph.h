@@ -31,4 +31,4 @@ void cmd_toggle_labels();
 void cmd_save(const char* slot);
 void cmd_load(const char* slot);
 
-#endif
+#endif // GRAPH_H

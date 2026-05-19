@@ -7,18 +7,16 @@
 #include "menu.h"
 #include "graph.h"
 
-/* Screen dimensions */
+// Screen dimensions
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 240
 
-
 TFT_eSPI tft = TFT_eSPI(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-/* LVGL Display Buffer (10% of screen size is standard for microcontrollers) */
+//LVGL Display Buffer
 #define DRAW_BUF_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT / 10 * (LV_COLOR_DEPTH / 8))
 uint32_t draw_buf[DRAW_BUF_SIZE / 4]; // 32-bit aligned array
 
-/* LVGL v9 Display Flushing Callback: This takes what LVGL draws in memory and pushes it to the screen */
 void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
@@ -28,11 +26,9 @@ void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     tft.pushColors((uint16_t *)px_map, w * h, true);
     tft.endWrite();
 
-    // Tell LVGL we are done flushing
     lv_display_flush_ready(disp);
 }
 
-/* Tells LVGL how much time has passed for animations and input tracking */
 uint32_t custom_tick_get(void) {
     return millis();
 }
@@ -70,7 +66,6 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             return;
         }
 
-        // 1. Translate your custom Arrow Keys (129-132) to LVGL Control Keys
         if (c == 129) {
             if (kb.isCtrl()) {
                 if (!is_terminal_active() && !is_menu_active()) cmd_zoom_y_in();
@@ -106,7 +101,6 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             }
         }
         
-        // 2. Translate standard control keys
         else if (c == '\n' || c == '\r') lv_key = LV_KEY_ENTER;
         else if (c == '\b') lv_key = LV_KEY_BACKSPACE;
         else if (c == 27) {
@@ -114,7 +108,6 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
             lv_key = LV_KEY_ESC;
         }
         
-        // 3. Pass standard ASCII characters directly
         else lv_key = c;
 
         data->key = lv_key;
@@ -130,38 +123,31 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
 void setup() {
     Serial.begin(115200);
     
-    // 1. Initialize TFT Driver
     pinMode(32, OUTPUT);
     digitalWrite(32, HIGH);
 
     tft.begin();
-    tft.setRotation(1); // Set to 1 or 3 for Landscape mode
+    tft.setRotation(1);
     tft.invertDisplay(false);
     tft.fillScreen(TFT_BLACK);
     
-    // 2. Core Graphics Engine Init
     lv_init();
     lv_tick_set_cb(custom_tick_get);
 
-    // 3. Connect Display Buffer to Engine
     lv_display_t * disp = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
     lv_display_set_flush_cb(disp, my_disp_flush);
     lv_display_set_buffers(disp, draw_buf, NULL, sizeof(draw_buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
     
-    // 4. Hardware Driver Init
     kb.begin(); 
 
-    // 5. Connect Input Driver to Engine
     lv_indev_t * indev_keypad = lv_indev_create();
     lv_indev_set_type(indev_keypad, LV_INDEV_TYPE_KEYPAD);
     lv_indev_set_read_cb(indev_keypad, keypad_read_cb);
 
-    // 6. Setup Global Navigation Management Group
     lv_group_t * g = lv_group_create();
     lv_group_set_default(g); 
     lv_indev_set_group(indev_keypad, g);
 
-    // 7. Render UI
     lv_obj_t * screen = lv_screen_active();
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), LV_PART_MAIN); 
     
@@ -173,8 +159,6 @@ void setup() {
 }
 
 void loop() {
-    // Let the GUI do its work. 
-    // This function must be called repeatedly for LVGL to update the screen.
     lv_timer_handler(); 
 
     uint8_t raw = kb.getLastScancode();

@@ -23,8 +23,8 @@ struct SensorSnapshot {
   uint32_t timestamp;  // 4 bytes (Time since boot)
   uint16_t potValue;   // 2 bytes (0-4095)
   uint16_t lightValue; // 2 bytes (0-4095)
-  float temperature;   // 4 bytes (e.g., 24.5)
-  float pressure;      // 4 bytes (e.g., 1013.25)
+  float temperature;   // 4 bytes
+  float pressure;      // 4 bytes
 };
 
 static SensorSnapshot data_buffer[MAX_SAMPLES];

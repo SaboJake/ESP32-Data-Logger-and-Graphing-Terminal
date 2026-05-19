@@ -124,7 +124,6 @@ static void submenu_event_cb(lv_event_t * e) {
         uint32_t key = lv_event_get_key(e);
         if (key == LV_KEY_ESC) close_submenu();
         
-        // Manual group navigation for UP/DOWN just in case
         if (!lv_obj_has_state(obj, LV_STATE_EDITED)) {
             if (key == LV_KEY_UP) lv_group_focus_prev(submenu_group);
             else if (key == LV_KEY_DOWN) lv_group_focus_next(submenu_group);
@@ -149,14 +148,14 @@ static void open_submenu() {
     lv_obj_add_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(submenu_container, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, submenu_group);
-    lv_group_focus_obj(lv_obj_get_parent(label_graph)); // Focus the graph button
+    lv_group_focus_obj(lv_obj_get_parent(label_graph));
 }
 
 static void close_submenu() {
     lv_obj_add_flag(submenu_container, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, menu_group);
-    lv_group_focus_obj(btn_start_rec); // Restore focus!
+    lv_group_focus_obj(btn_start_rec);
 }
 
 static void load_submenu_event_cb(lv_event_t * e) {
@@ -171,14 +170,14 @@ static void open_load_submenu() {
     lv_obj_add_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, load_group);
-    lv_group_focus_next(load_group); // Focus the dummy button
+    lv_group_focus_next(load_group);
 }
 
 static void close_load_submenu() {
     lv_obj_add_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, menu_group);
-    lv_group_focus_obj(btn_load); // Restore focus to the load button!
+    lv_group_focus_obj(btn_load);
 }
 
 static lv_obj_t * create_menu_btn(lv_obj_t * parent, const char * text, lv_group_t * group, lv_event_cb_t cb) {
@@ -271,10 +270,12 @@ void init_menu(lv_indev_t * indev) {
     lv_label_set_text(sub_title, "NEW RECORDING");
     lv_obj_set_style_text_font(sub_title, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(sub_title, lv_color_hex(0x00FF00), 0);
+    
     // Add some bottom margin to the title so it pushes the scroll container down
     lv_obj_set_style_margin_bottom(sub_title, 5, 0);
 
     lv_obj_t * scroll_cont = lv_obj_create(submenu_container);
+    
     // Let the scroll container fill the remaining height
     lv_obj_set_size(scroll_cont, 290, 170); 
     lv_obj_set_style_pad_all(scroll_cont, 0, 0);
