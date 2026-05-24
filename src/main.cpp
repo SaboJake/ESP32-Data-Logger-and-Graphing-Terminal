@@ -1,7 +1,11 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include <TFT_eSPI.h>
 #include <lvgl.h>
 #include "ps2_keyboard.h"
+#include <FS.h>
+#include <SD.h>
+
 
 #include "terminal.h"
 #include "menu.h"
@@ -10,6 +14,8 @@
 // Screen dimensions
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 240
+
+const int SD_CS_PIN = 16;
 
 TFT_eSPI tft = TFT_eSPI(SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -123,8 +129,26 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
 void setup() {
     Serial.begin(115200);
     
+    // Explicitly configure Chip Selects to prevent bus collision during initialization
+    pinMode(14, OUTPUT);
+    digitalWrite(14, HIGH); // Keep TFT screen deselected from SPI
+
+    pinMode(SD_CS_PIN, OUTPUT);
+    digitalWrite(SD_CS_PIN, HIGH); // Keep SD card deselected from SPI
+
     pinMode(32, OUTPUT);
     digitalWrite(32, HIGH);
+
+    // Initialize shared SPI bus pins (SCLK=18, MISO=19, MOSI=23, SS=16)
+    SPI.begin(18, 19, 23, SD_CS_PIN);
+    delay(10); // Short delay to let signals settle
+
+    // Initialize SD Card
+    if (!SD.begin(SD_CS_PIN)) {
+        Serial.println("SD Card Mount Failed!");
+    } else {
+        Serial.println("SD Card Mount Successful.");
+    }
 
     tft.begin();
     tft.setRotation(1);

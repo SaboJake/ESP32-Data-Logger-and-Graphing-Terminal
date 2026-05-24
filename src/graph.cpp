@@ -2,7 +2,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
-#include <EEPROM.h>
+#include <FS.h>
+#include <SD.h>
 
 AppState current_state = STATE_INITIAL;
 
@@ -17,7 +18,7 @@ static bool show_labels = true;
 
 LV_FONT_DECLARE(lv_font_unscii_16);
 
-#define MAX_SAMPLES 250 // Fits in 4KB EEPROM (250 * 16 bytes = 4000)
+#define MAX_SAMPLES 500 // In-RAM cache / recording limit
 
 struct SensorSnapshot {
   uint32_t timestamp;  // 4 bytes (Time since boot)
@@ -27,7 +28,22 @@ struct SensorSnapshot {
   float pressure;      // 4 bytes
 };
 
+struct FileHeader {
+  char magic[4]; // "LOG"
+  uint32_t sample_count;
+  uint32_t sample_rate;
+  uint32_t record_time;
+  int scale_x_window;
+  int scale_y_min;
+  int scale_y_max;
+};
+
 static SensorSnapshot data_buffer[MAX_SAMPLES];
+
+static char current_file_path[64] = "";
+static int file_total_samples = 0;
+static int buffered_start = -1;
+static int buffered_count = 0;
 
 static int active_sensor = 0; // 0=pot, 1=light, 2=temp, 3=pres
 static int sample_rate = 1; // Hz
@@ -55,21 +71,67 @@ static void update_chart_source() {
         if (pan_offset < 0) pan_offset = 0;
     }
     
-    if (pan_offset > MAX_SAMPLES - visible_points) {
-        pan_offset = MAX_SAMPLES - visible_points;
+    int total_avail = (current_file_path[0] != '\0') ? file_total_samples : sample_count;
+    
+    if (pan_offset > total_avail - visible_points) {
+        pan_offset = total_avail - visible_points;
     }
     if (pan_offset < 0) pan_offset = 0;
+
+    // Load chunk from SD card if viewing a loaded file
+    if (current_file_path[0] != '\0') {
+        // We need range [pan_offset, pan_offset + visible_points]
+        bool fully_buffered = (buffered_start >= 0) &&
+                              (pan_offset >= buffered_start) &&
+                              ((pan_offset + visible_points) <= (buffered_start + buffered_count));
+                              
+        if (!fully_buffered) {
+            int to_load_start = pan_offset;
+            int to_load_count = MAX_SAMPLES;
+            if (to_load_start + to_load_count > file_total_samples) {
+                to_load_count = file_total_samples - to_load_start;
+            }
+            if (to_load_count < 0) to_load_count = 0;
+            
+            if (to_load_count > 0) {
+                File file = SD.open(current_file_path, FILE_READ);
+                if (file) {
+                    file.seek(sizeof(FileHeader) + to_load_start * sizeof(SensorSnapshot));
+                    int read_bytes = file.read((uint8_t*)data_buffer, to_load_count * sizeof(SensorSnapshot));
+                    int read_count = read_bytes / sizeof(SensorSnapshot);
+                    file.close();
+                    
+                    buffered_start = to_load_start;
+                    buffered_count = read_count;
+                    Serial.printf("SD Cache Miss: loaded %d samples starting at %d from %s\n", read_count, to_load_start, current_file_path);
+                } else {
+                    Serial.printf("Failed to open file for paging: %s\n", current_file_path);
+                }
+            }
+        }
+    }
 
     lv_chart_set_point_count(chart, visible_points);
     
     for(int i = 0; i < visible_points; i++) {
         int idx = pan_offset + i;
         int32_t val = 0;
-        if (idx < sample_count) {
-            if (active_sensor == 0) val = data_buffer[idx].potValue;
-            else if (active_sensor == 1) val = data_buffer[idx].lightValue;
-            else if (active_sensor == 2) val = (int32_t)data_buffer[idx].temperature;
-            else if (active_sensor == 3) val = (int32_t)data_buffer[idx].pressure;
+        
+        if (current_file_path[0] != '\0') {
+            if (idx >= buffered_start && idx < (buffered_start + buffered_count)) {
+                int cache_idx = idx - buffered_start;
+                if (active_sensor == 0) val = data_buffer[cache_idx].potValue;
+                else if (active_sensor == 1) val = data_buffer[cache_idx].lightValue;
+                else if (active_sensor == 2) val = (int32_t)data_buffer[cache_idx].temperature;
+                else if (active_sensor == 3) val = (int32_t)data_buffer[cache_idx].pressure;
+            }
+        } else {
+            if (idx < sample_count) {
+                if (active_sensor == 0) val = data_buffer[idx].potValue;
+                else if (active_sensor == 1) val = data_buffer[idx].lightValue;
+                else if (active_sensor == 2) val = (int32_t)data_buffer[idx].temperature;
+                else if (active_sensor == 3) val = (int32_t)data_buffer[idx].pressure;
+            }
         }
         lv_chart_set_value_by_id(chart, ser, i, val);
     }
@@ -124,8 +186,6 @@ void init_graph(lv_obj_t * parent) {
     } else {
         Serial.println("BMP180 NOT FOUND!");
     }
-    
-    EEPROM.begin(4096);
 
     chart = lv_chart_create(parent);
     lv_obj_set_size(chart, 240, 205);
@@ -205,6 +265,11 @@ void set_time(int time_sec) {
 
 void cmd_start_recording() {
     if (current_state == STATE_INITIAL || current_state == STATE_INSPECT) {
+        current_file_path[0] = '\0';
+        file_total_samples = 0;
+        buffered_start = -1;
+        buffered_count = 0;
+
         sample_count = 0;
         current_state = STATE_RUNNING;
         last_sample_time = millis();
@@ -327,26 +392,83 @@ void cmd_toggle_labels() {
 
 void cmd_save(const char* slot) {
     if (current_state == STATE_INSPECT || current_state == STATE_INITIAL) {
-        EEPROM.put(0, sample_count);
-        EEPROM.put(sizeof(int), sample_rate);
-        int offset = sizeof(int) * 2;
+        char filename[64];
+        if (slot[0] == '/') {
+            snprintf(filename, sizeof(filename), "%s", slot);
+        } else {
+            snprintf(filename, sizeof(filename), "/%s", slot);
+        }
+        if (strstr(filename, ".bin") == NULL) {
+            strncat(filename, ".bin", sizeof(filename) - strlen(filename) - 1);
+        }
         
-        EEPROM.put(offset, data_buffer);
-        EEPROM.commit();
+        File file = SD.open(filename, FILE_WRITE);
+        if (!file) {
+            Serial.printf("Failed to open file for writing: %s\n", filename);
+            return;
+        }
+        
+        FileHeader header;
+        memcpy(header.magic, "LOG", 4);
+        header.sample_count = sample_count;
+        header.sample_rate = sample_rate;
+        header.record_time = record_time;
+        header.scale_x_window = scale_x_window;
+        header.scale_y_min = scale_y_min;
+        header.scale_y_max = scale_y_max;
+        
+        file.write((uint8_t*)&header, sizeof(header));
+        file.write((uint8_t*)data_buffer, sample_count * sizeof(SensorSnapshot));
+        file.close();
+        
+        Serial.printf("Saved %d samples to SD card: %s\n", sample_count, filename);
     }
 }
 
 void cmd_load(const char* slot) {
-    if (current_state == STATE_INSPECT || current_state == STATE_INITIAL) {
-        EEPROM.get(0, sample_count);
-        EEPROM.get(sizeof(int), sample_rate);
-        int offset = sizeof(int) * 2;
-        
-        if (sample_count > MAX_SAMPLES || sample_count < 0) sample_count = 0;
-        
-        EEPROM.get(offset, data_buffer);
-        
-        current_state = STATE_INSPECT;
-        update_chart_source();
+    char filename[64];
+    if (slot[0] == '/') {
+        snprintf(filename, sizeof(filename), "%s", slot);
+    } else {
+        snprintf(filename, sizeof(filename), "/%s", slot);
     }
+    if (strstr(filename, ".bin") == NULL) {
+        strncat(filename, ".bin", sizeof(filename) - strlen(filename) - 1);
+    }
+    
+    File file = SD.open(filename, FILE_READ);
+    if (!file) {
+        Serial.printf("Failed to open file for reading: %s\n", filename);
+        return;
+    }
+    
+    FileHeader header;
+    if (file.read((uint8_t*)&header, sizeof(header)) != sizeof(header) || strcmp(header.magic, "LOG") != 0) {
+        Serial.printf("Invalid file header in: %s\n", filename);
+        file.close();
+        return;
+    }
+    
+    sample_count = header.sample_count;
+    sample_rate = header.sample_rate;
+    record_time = header.record_time;
+    scale_x_window = header.scale_x_window;
+    scale_y_min = header.scale_y_min;
+    scale_y_max = header.scale_y_max;
+    
+    // Store loaded file info
+    strncpy(current_file_path, filename, sizeof(current_file_path) - 1);
+    current_file_path[sizeof(current_file_path) - 1] = '\0';
+    file_total_samples = sample_count;
+    
+    // Clear buffer cache
+    buffered_start = -1;
+    buffered_count = 0;
+    
+    file.close();
+    
+    current_state = STATE_INSPECT;
+    update_chart_source();
+    
+    Serial.printf("Loaded %d samples from SD card: %s\n", sample_count, filename);
 }

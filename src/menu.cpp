@@ -2,6 +2,8 @@
 #include "graph.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <FS.h>
+#include <SD.h>
 
 LV_FONT_DECLARE(lv_font_unscii_16);
 
@@ -21,6 +23,7 @@ static lv_obj_t * btn_exit;
 
 static lv_obj_t * submenu_container;
 static lv_obj_t * load_cont;
+static lv_obj_t * load_scroll_cont = NULL;
 static lv_obj_t * main_cont;
 static lv_obj_t * label_graph;
 static int sensor_idx = 0;
@@ -38,6 +41,26 @@ static void open_submenu();
 static void close_submenu();
 static void open_load_submenu();
 static void close_load_submenu();
+
+static lv_group_t * save_group;
+static lv_obj_t * save_cont;
+static lv_obj_t * ta_save_filename;
+static lv_obj_t * btn_save_confirm;
+static lv_obj_t * btn_save_cancel;
+
+static lv_group_t * param_group;
+static lv_obj_t * param_cont;
+static char selected_load_file[64] = "";
+static lv_obj_t * btn_param_pot;
+static lv_obj_t * btn_param_light;
+static lv_obj_t * btn_param_temp;
+static lv_obj_t * btn_param_pres;
+static lv_obj_t * btn_param_cancel;
+
+static void open_save_submenu();
+static void close_save_submenu();
+static void open_param_submenu(const char * filename);
+static void close_param_submenu();
 
 static void apply_retro_style(lv_obj_t * obj) {
     lv_obj_set_style_text_font(obj, &lv_font_unscii_16, 0);
@@ -71,8 +94,8 @@ static void menu_event_cb(lv_event_t * e) {
 
     if (code == LV_EVENT_CLICKED) {
         if (obj == btn_start_rec) open_submenu();
-        else if (obj == btn_save) cmd_save("slot1");
-        else if (obj == btn_load) cmd_load("slot1");
+        else if (obj == btn_save) open_save_submenu();
+        else if (obj == btn_load) open_load_submenu();
         else if (obj == btn_exit) close_menu();
     } else if (code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
@@ -158,19 +181,131 @@ static void close_submenu() {
     lv_group_focus_obj(btn_start_rec);
 }
 
-static void load_submenu_event_cb(lv_event_t * e) {
+static void save_submenu_event_cb(lv_event_t * e) {
+    lv_obj_t * obj = (lv_obj_t *)lv_event_get_target(e);
     lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_KEY) {
+
+    if (code == LV_EVENT_CLICKED) {
+        if (obj == btn_save_confirm) {
+            const char * filename = lv_textarea_get_text(ta_save_filename);
+            if (strlen(filename) > 0) {
+                Serial.printf("Saving recording to file: %s\n", filename);
+                cmd_save(filename);
+            }
+            close_save_submenu();
+            close_menu();
+        }
+        else if (obj == btn_save_cancel) {
+            close_save_submenu();
+        }
+    } else if (code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
-        if (key == LV_KEY_ESC) close_load_submenu();
+        if (key == LV_KEY_ESC) close_save_submenu();
+        
+        if (!lv_obj_has_state(obj, LV_STATE_EDITED)) {
+            if (key == LV_KEY_UP) lv_group_focus_prev(save_group);
+            else if (key == LV_KEY_DOWN) lv_group_focus_next(save_group);
+        }
     }
 }
 
-static void open_load_submenu() {
+static void open_save_submenu() {
     lv_obj_add_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(save_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_indev_set_group(keypad_indev, save_group);
+    lv_group_focus_obj(ta_save_filename);
+}
+
+static void close_save_submenu() {
+    lv_obj_add_flag(save_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_indev_set_group(keypad_indev, menu_group);
+    lv_group_focus_obj(btn_save);
+}
+
+static void open_param_submenu(const char * filename) {
+    strncpy(selected_load_file, filename, sizeof(selected_load_file) - 1);
+    selected_load_file[sizeof(selected_load_file) - 1] = '\0';
+
+    lv_obj_add_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(param_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_indev_set_group(keypad_indev, param_group);
+    lv_group_focus_obj(btn_param_pot);
+}
+
+static void close_param_submenu() {
+    lv_obj_add_flag(param_cont, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, load_group);
-    lv_group_focus_next(load_group);
+    
+    if (lv_obj_get_child_count(load_scroll_cont) > 0) {
+        lv_group_focus_obj(lv_obj_get_child(load_scroll_cont, 0));
+    }
+}
+
+static void param_submenu_event_cb(lv_event_t * e) {
+    lv_obj_t * obj = (lv_obj_t *)lv_event_get_target(e);
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED) {
+        if (obj == btn_param_pot) set_active_sensor(0);
+        else if (obj == btn_param_light) set_active_sensor(1);
+        else if (obj == btn_param_temp) set_active_sensor(2);
+        else if (obj == btn_param_pres) set_active_sensor(3);
+        
+        if (obj != btn_param_cancel) {
+            Serial.printf("Loading file '%s' with active sensor %d\n", selected_load_file, sensor_idx);
+            cmd_load(selected_load_file);
+            
+            lv_obj_add_flag(param_cont, LV_OBJ_FLAG_HIDDEN);
+            close_menu();
+        } else {
+            close_param_submenu();
+        }
+    } else if (code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if (key == LV_KEY_ESC) close_param_submenu();
+        else if (key == LV_KEY_UP) lv_group_focus_prev(param_group);
+        else if (key == LV_KEY_DOWN) lv_group_focus_next(param_group);
+    }
+}
+
+static void load_file_click_cb(lv_event_t * e) {
+    lv_obj_t * obj = (lv_obj_t *)lv_event_get_target(e);
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_CLICKED) {
+        lv_obj_t * label = lv_obj_get_child(obj, 0);
+        if (label) {
+            const char * filename = lv_label_get_text(label);
+            Serial.printf("Selected file: %s. Opening parameter submenu.\n", filename);
+            open_param_submenu(filename);
+        }
+    } else if (code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if (key == LV_KEY_ESC) {
+            close_load_submenu();
+        } else if (key == LV_KEY_UP) {
+            lv_group_focus_prev(load_group);
+        } else if (key == LV_KEY_DOWN) {
+            lv_group_focus_next(load_group);
+        }
+    }
+}
+
+static void load_back_click_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_CLICKED) {
+        close_load_submenu();
+    } else if (code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if (key == LV_KEY_ESC) {
+            close_load_submenu();
+        } else if (key == LV_KEY_UP) {
+            lv_group_focus_prev(load_group);
+        } else if (key == LV_KEY_DOWN) {
+            lv_group_focus_next(load_group);
+        }
+    }
 }
 
 static void close_load_submenu() {
@@ -178,6 +313,84 @@ static void close_load_submenu() {
     lv_obj_remove_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_group(keypad_indev, menu_group);
     lv_group_focus_obj(btn_load);
+}
+
+static void open_load_submenu() {
+    // 1. Delete all dynamic children of load_scroll_cont (releasing memory and removing from load_group)
+    if (load_scroll_cont) {
+        uint32_t child_cnt = lv_obj_get_child_count(load_scroll_cont);
+        for (int i = (int)child_cnt - 1; i >= 0; i--) {
+            lv_obj_t * child = lv_obj_get_child(load_scroll_cont, i);
+            lv_obj_delete(child);
+        }
+    }
+    
+    // Clear load group to prevent focus of deleted elements
+    lv_group_remove_all_objs(load_group);
+
+    // 2. Scan SD card root directory and list files
+    bool has_files = false;
+    File root = SD.open("/");
+    if (root) {
+        File file = root.openNextFile();
+        while (file) {
+            if (!file.isDirectory()) {
+                const char* filepath = file.name();
+                // Check if name ends with .bin
+                const char* dot = strrchr(filepath, '.');
+                if (dot && strcmp(dot, ".bin") == 0) {
+                    const char* filename = strrchr(filepath, '/');
+                    if (filename) filename++;
+                    else filename = filepath;
+                    
+                    // Create dynamic file button
+                    lv_obj_t * btn = lv_button_create(load_scroll_cont);
+                    lv_obj_set_width(btn, 260);
+                    apply_retro_btn_style(btn);
+                    lv_obj_add_event_cb(btn, load_file_click_cb, LV_EVENT_ALL, NULL);
+                    
+                    lv_obj_t * label = lv_label_create(btn);
+                    lv_label_set_text(label, filename);
+                    lv_obj_center(label);
+                    
+                    lv_group_add_obj(load_group, btn);
+                    has_files = true;
+                }
+            }
+            file = root.openNextFile();
+        }
+        root.close();
+    }
+    
+    if (!has_files) {
+        lv_obj_t * info_label = lv_label_create(load_scroll_cont);
+        lv_label_set_text(info_label, "No files found.");
+        lv_obj_set_style_text_font(info_label, &lv_font_unscii_16, 0);
+        lv_obj_set_style_text_color(info_label, lv_color_hex(0x00AA00), 0);
+        lv_obj_set_style_margin_bottom(info_label, 10, 0);
+    }
+    
+    // Recreate Back Button
+    lv_obj_t * btn_back = lv_button_create(load_scroll_cont);
+    lv_obj_set_width(btn_back, 260);
+    apply_retro_btn_style(btn_back);
+    lv_obj_add_event_cb(btn_back, load_back_click_cb, LV_EVENT_ALL, NULL);
+    
+    lv_obj_t * label_back = lv_label_create(btn_back);
+    lv_label_set_text(label_back, "Back");
+    lv_obj_center(label_back);
+    
+    lv_group_add_obj(load_group, btn_back);
+    
+    // Switch container and group
+    lv_obj_add_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
+    lv_indev_set_group(keypad_indev, load_group);
+    
+    // Focus the first button in the scroll container
+    if (lv_obj_get_child_count(load_scroll_cont) > 0) {
+        lv_group_focus_obj(lv_obj_get_child(load_scroll_cont, 0));
+    }
 }
 
 static lv_obj_t * create_menu_btn(lv_obj_t * parent, const char * text, lv_group_t * group, lv_event_cb_t cb) {
@@ -317,18 +530,86 @@ void init_menu(lv_indev_t * indev) {
     lv_obj_add_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t * load_title = lv_label_create(load_cont);
-    lv_label_set_text(load_title, "LOAD RECORDING (Blank)");
+    lv_label_set_text(load_title, "LOAD RECORDING");
     lv_obj_set_style_text_font(load_title, &lv_font_unscii_16, 0);
     lv_obj_set_style_text_color(load_title, lv_color_hex(0x00FF00), 0);
-    
-    lv_obj_t * dummy_btn = lv_button_create(load_cont);
-    lv_obj_set_width(dummy_btn, 260);
-    apply_retro_btn_style(dummy_btn);
-    lv_obj_add_event_cb(dummy_btn, load_submenu_event_cb, LV_EVENT_KEY, NULL);
-    lv_obj_t * dummy_label = lv_label_create(dummy_btn);
-    lv_label_set_text(dummy_label, "Back");
-    lv_obj_center(dummy_label);
-    lv_group_add_obj(load_group, dummy_btn);
+    lv_obj_set_style_margin_bottom(load_title, 5, 0);
+
+    load_scroll_cont = lv_obj_create(load_cont);
+    lv_obj_set_size(load_scroll_cont, 290, 170); 
+    lv_obj_set_style_pad_all(load_scroll_cont, 0, 0);
+    lv_obj_set_style_border_width(load_scroll_cont, 0, 0);
+    lv_obj_set_style_bg_opa(load_scroll_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_flex_flow(load_scroll_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(load_scroll_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // Save Submenu
+    save_group = lv_group_create();
+    save_cont = lv_obj_create(menu_screen);
+    lv_obj_set_size(save_cont, 300, 220);
+    lv_obj_center(save_cont);
+    lv_obj_set_flex_flow(save_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(save_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    apply_retro_style(save_cont);
+    lv_obj_add_flag(save_cont, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t * save_title = lv_label_create(save_cont);
+    lv_label_set_text(save_title, "SAVE RECORDING");
+    lv_obj_set_style_text_font(save_title, &lv_font_unscii_16, 0);
+    lv_obj_set_style_text_color(save_title, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_margin_bottom(save_title, 10, 0);
+
+    // Custom filename text area
+    lv_obj_t * ta_cont = lv_obj_create(save_cont);
+    lv_obj_set_size(ta_cont, 280, 50);
+    lv_obj_set_style_pad_all(ta_cont, 0, 0);
+    lv_obj_set_style_border_width(ta_cont, 0, 0);
+    lv_obj_set_style_bg_opa(ta_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_flex_flow(ta_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ta_cont, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t * label_fn = lv_label_create(ta_cont);
+    lv_label_set_text(label_fn, "Name:");
+    lv_obj_set_style_text_font(label_fn, &lv_font_unscii_16, 0);
+    lv_obj_set_style_text_color(label_fn, lv_color_hex(0x00AA00), 0);
+
+    ta_save_filename = lv_textarea_create(ta_cont);
+    lv_textarea_set_one_line(ta_save_filename, true);
+    lv_obj_set_size(ta_save_filename, 160, 32);
+    lv_textarea_set_text(ta_save_filename, "log1");
+    apply_retro_style(ta_save_filename);
+    lv_obj_set_style_bg_color(ta_save_filename, lv_color_hex(0x004400), LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(ta_save_filename, lv_color_hex(0x00FF00), LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_color(ta_save_filename, lv_color_hex(0x00AA00), LV_STATE_EDITED);
+    lv_obj_set_style_text_color(ta_save_filename, lv_color_hex(0x000000), LV_STATE_EDITED);
+
+    lv_group_add_obj(save_group, ta_save_filename);
+    lv_obj_add_event_cb(ta_save_filename, save_submenu_event_cb, LV_EVENT_KEY, NULL);
+
+    btn_save_confirm = create_menu_btn(save_cont, "Save", save_group, save_submenu_event_cb);
+    btn_save_cancel = create_menu_btn(save_cont, "Cancel", save_group, save_submenu_event_cb);
+
+    // Select Parameter Submenu
+    param_group = lv_group_create();
+    param_cont = lv_obj_create(menu_screen);
+    lv_obj_set_size(param_cont, 300, 220);
+    lv_obj_center(param_cont);
+    lv_obj_set_flex_flow(param_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(param_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    apply_retro_style(param_cont);
+    lv_obj_add_flag(param_cont, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t * param_title = lv_label_create(param_cont);
+    lv_label_set_text(param_title, "SELECT PARAMETER");
+    lv_obj_set_style_text_font(param_title, &lv_font_unscii_16, 0);
+    lv_obj_set_style_text_color(param_title, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_margin_bottom(param_title, 5, 0);
+
+    btn_param_pot = create_menu_btn(param_cont, "Potentiometer", param_group, param_submenu_event_cb);
+    btn_param_light = create_menu_btn(param_cont, "Light Sensor", param_group, param_submenu_event_cb);
+    btn_param_temp = create_menu_btn(param_cont, "Temperature", param_group, param_submenu_event_cb);
+    btn_param_pres = create_menu_btn(param_cont, "Pressure", param_group, param_submenu_event_cb);
+    btn_param_cancel = create_menu_btn(param_cont, "Cancel", param_group, param_submenu_event_cb);
 }
 
 void toggle_menu() {
@@ -340,6 +621,8 @@ void toggle_menu() {
         lv_obj_remove_flag(main_cont, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(submenu_container, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(load_cont, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(save_cont, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(param_cont, LV_OBJ_FLAG_HIDDEN);
         lv_indev_set_group(keypad_indev, menu_group);
         lv_group_focus_obj(btn_start_rec); // Focus first button
         is_menu_open = true;
