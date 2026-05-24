@@ -27,6 +27,8 @@ void cmd_zoom_y_in();
 void cmd_zoom_y_out();
 void cmd_pan(int pan_amount);
 void cmd_pan_y(int pan_amount);
+void cmd_pan_relative(int direction);
+void cmd_pan_y_relative(int direction);
 void cmd_toggle_labels();
 void cmd_save(const char* slot);
 void cmd_load(const char* slot);

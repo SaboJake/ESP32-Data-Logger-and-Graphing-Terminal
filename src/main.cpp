@@ -72,7 +72,7 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 else lv_key = 133;
             } else {
                 lv_key = LV_KEY_UP;
-                if (!is_terminal_active() && !is_menu_active()) cmd_pan_y(100);
+                if (!is_terminal_active() && !is_menu_active()) cmd_pan_y_relative(1);
             }
         }
         else if (c == 130) {
@@ -81,7 +81,7 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 else lv_key = 134;
             } else {
                 lv_key = LV_KEY_DOWN;
-                if (!is_terminal_active() && !is_menu_active()) cmd_pan_y(-100);
+                if (!is_terminal_active() && !is_menu_active()) cmd_pan_y_relative(-1);
             }
         }
         else if (c == 131) {
@@ -89,7 +89,7 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 if (!is_terminal_active() && !is_menu_active()) cmd_zoom_out();
             } else {
                 lv_key = LV_KEY_LEFT;
-                if (!is_terminal_active() && !is_menu_active()) cmd_pan(-1);
+                if (!is_terminal_active() && !is_menu_active()) cmd_pan_relative(-1);
             }
         }
         else if (c == 132) {
@@ -97,7 +97,7 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
                 if (!is_terminal_active() && !is_menu_active()) cmd_zoom_in();
             } else {
                 lv_key = LV_KEY_RIGHT;
-                if (!is_terminal_active() && !is_menu_active()) cmd_pan(1);
+                if (!is_terminal_active() && !is_menu_active()) cmd_pan_relative(1);
             }
         }
         

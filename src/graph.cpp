@@ -290,6 +290,26 @@ void cmd_pan_y(int pan_amount) {
     }
 }
 
+void cmd_pan_relative(int direction) {
+    if (current_state == STATE_INSPECT) {
+        int visible_points = scale_x_window * sample_rate;
+        if (visible_points < 2) visible_points = 2;
+        int step = visible_points / 10;
+        if (step < 1) step = 1;
+        cmd_pan(direction * step);
+    }
+}
+
+void cmd_pan_y_relative(int direction) {
+    if (current_state == STATE_INSPECT) {
+        int range = scale_y_max - scale_y_min;
+        if (range < 0) range = -range;
+        int step = range / 10;
+        if (step < 1) step = 1;
+        cmd_pan_y(direction * step);
+    }
+}
+
 void cmd_toggle_labels() {
     show_labels = !show_labels;
     if (show_labels) {
