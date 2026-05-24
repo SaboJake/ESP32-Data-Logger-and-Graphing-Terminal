@@ -22,9 +22,10 @@ This project is a standalone data logging and visualization system based on the 
 
 ### Bill of Materials
 * **Microcontroller:** ESP32-WROOM-32D (DevKitC V4)
-* **Display:** TFT SPI 2.4 inch display module (240x320 resolution)
+* **Display & Storage:** TFT SPI 2.4 inch display module (240x320 resolution) with integrated SD card reader slot
+* **Non-volatile Storage:** MicroSD Card (formatted in FAT32) utilizing display's integrated reader
 * **Input:** Standard PS/2 keyboard and female PS/2 connector
-* **Non-volatile Memory:** EEPROM I2C AT24C256 (32K)
+* **Non-volatile Memory:** EEPROM I2C AT24C256 (32K) (reserved / legacy storage)
 * **Digital Sensors:** BMP180 (I2C) pressure and temperature sensor
 * **Analog Sensors:** Photoresistor (type 5528) + 10kΩ resistor, 10kΩ potentiometer
 * **Passive Components:** 1kΩ and 10kΩ resistors, BC547B NPN transistor
@@ -40,12 +41,13 @@ This project is a standalone data logging and visualization system based on the 
 * **TFT_eSPI (v2.5.43):** Hardware-accelerated graphics driver configured for ST7789 over high-speed SPI.
 * **LVGL (v9.1.0):** Core UI framework powering the menus, terminal overlay, and real-time charting.
 * **Adafruit BMP085 Library:** Interface for the BMP180 sensor over I2C.
+* **FS, SD, and SPI (Standard ESP32 Core):** Core filesystem and SPI drivers to read/write log files and handle dynamic data paging on-demand.
 
 ### Project Structure
 * **`main.cpp`:** System orchestrator. Initializes hardware, bridges LVGL with display and keyboard drivers, and drives the main loop.
-* **`graph.cpp` / `graph.h`:** Manages the LVGL charting subsystem, data acquisition, dynamic data windowing/mapping (panning and zooming), and EEPROM state persistence.
+* **`graph.cpp` / `graph.h`:** Manages the LVGL charting subsystem, data acquisition, dynamic data windowing/mapping (panning and zooming), and SD card logging with dynamic cache-miss file paging.
 * **`terminal.cpp` / `terminal.h`:** Implements the graphical terminal overlay, parsing commands and interfacing with graphing logic.
-* **`menu.cpp` / `menu.h`:** Controls GUI-based settings configuration.
+* **`menu.cpp` / `menu.h`:** Controls GUI-based settings configuration, including custom Save filename inputs and post-load Sensor Parameter selection submenus.
 * **`ps2_keyboard.cpp` / `ps2_keyboard.h`:** Custom bare-metal PS/2 keyboard driver utilizing hardware interrupts and a circular buffer.
 
 ## Getting Started
