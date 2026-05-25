@@ -126,12 +126,14 @@ void keypad_read_cb(lv_indev_t * indev, lv_indev_data_t * data) {
     }
 }
 
+SPIClass hspi(HSPI);
+
 void setup() {
     Serial.begin(115200);
     
     // Explicitly configure Chip Selects to prevent bus collision during initialization
-    pinMode(14, OUTPUT);
-    digitalWrite(14, HIGH); // Keep TFT screen deselected from SPI
+    pinMode(TFT_CS, OUTPUT);
+    digitalWrite(TFT_CS, HIGH); // Keep TFT screen deselected from SPI
 
     pinMode(SD_CS_PIN, OUTPUT);
     digitalWrite(SD_CS_PIN, HIGH); // Keep SD card deselected from SPI
@@ -140,11 +142,14 @@ void setup() {
     digitalWrite(32, HIGH);
 
     // Initialize shared SPI bus pins (SCLK=18, MISO=19, MOSI=23, SS=16)
-    SPI.begin(18, 19, 23, SD_CS_PIN);
+    SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
     delay(10); // Short delay to let signals settle
 
+    hspi.begin(14, 12, 13, SD_CS_PIN);
+    delay(10);
+
     // Initialize SD Card
-    if (!SD.begin(SD_CS_PIN)) {
+    if (!SD.begin(SD_CS_PIN, hspi, 4000000)) {
         Serial.println("SD Card Mount Failed!");
     } else {
         Serial.println("SD Card Mount Successful.");
