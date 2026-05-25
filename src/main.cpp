@@ -131,19 +131,17 @@ SPIClass hspi(HSPI);
 void setup() {
     Serial.begin(115200);
     
-    // Explicitly configure Chip Selects to prevent bus collision during initialization
     pinMode(TFT_CS, OUTPUT);
-    digitalWrite(TFT_CS, HIGH); // Keep TFT screen deselected from SPI
+    digitalWrite(TFT_CS, HIGH);
 
     pinMode(SD_CS_PIN, OUTPUT);
-    digitalWrite(SD_CS_PIN, HIGH); // Keep SD card deselected from SPI
+    digitalWrite(SD_CS_PIN, HIGH);
 
     pinMode(32, OUTPUT);
     digitalWrite(32, HIGH);
 
-    // Initialize shared SPI bus pins (SCLK=18, MISO=19, MOSI=23, SS=16)
     SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-    delay(10); // Short delay to let signals settle
+    delay(10);
 
     hspi.begin(14, 12, 13, SD_CS_PIN);
     delay(10);
